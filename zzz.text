@@ -1,0 +1,1525 @@
+<?php
+include('lib/module.php');
+include('lib/service_classes/Apns.php');
+include('lib/service_classes/DataService.php');
+include('lib/service_classes/GCM.php');
+include('lib/service_classes/config_dev.php'); 
+//date_default_timezone_set('Asia/Kolkata');
+date_default_timezone_set('Canada/Central');
+function time_diff($date1,$date2)
+{
+    $dateF = new DateTime($date1);
+    $dateL = new DateTime($date2);
+    $interval = $dateF->diff($dateL);
+    $years = $interval->y;
+    $days = $interval->d;
+    $hours = $interval->h;
+    $mins = $interval->i;
+    $sec = $interval->s;
+    $diff = abs(strtotime($date2) - strtotime($date1));
+    $weeks = floor($diff/604800);
+    $str='';
+    if($years>0)
+    {
+        $str.= chk_gtr2($years,'year');
+    }
+    else if($weeks>0)
+    {
+        $str.=chk_gtr2($weeks,'week');
+    }
+    else if($days>0)
+    {
+        $str=chk_gtr2($days,'day');
+    }
+    else if($hours>0)
+    {
+        $str=chk_gtr2($hours,'hour');
+    }
+    else if($mins>0)
+    {
+        $str=chk_gtr2($mins,'minute');
+    }
+    else if($sec>0)
+    {
+        $str .= chk_gtr2($sec,'second');
+    }
+    else
+    {
+        $str .= "1second ago";
+    }
+    return $str;
+}
+function chk_gtr2($count, $attr) {
+    if ($count > 1) {
+        return $count . ' ' . $attr . 's ago';
+    } else {
+        return $count . ' ' . $attr . ' ago';
+    }
+}
+if ($_REQUEST['op']) 
+{
+	$params =$_REQUEST;
+	if ($_REQUEST['op']   == 	"Login")							{ 	Login(); 			}
+	if ($_REQUEST['op']   == 	"Download_noti")					{ 	Download_noti(); 	}
+	if ($_REQUEST['op']	  ==    "android")							{ 	android(); 			}
+	if ($_REQUEST['op']   ==    "ios") 								{	ios();				}
+	if ($_REQUEST['op']   ==    "Notification_listing")				{	Notification_listing();				}	
+	if ($_REQUEST['op']   ==    "Logout")							{	Logout();	}	
+	if ($_REQUEST['op']   ==    "Uniq_DeviceID_Update")				{	Uniq_DeviceID_Update();	}	
+	
+	
+	
+	
+}
+function android(){	
+	$did = $_REQUEST['did'];
+	$img = $_REQUEST['img'];
+    if($img==""){
+	$img='http://www.clker.com/cliparts/h/3/1/U/8/F/glacier-scene-hi.png';
+	}
+	$message1=array(	
+	"msg" => "This is test",
+	"Id"=>2,
+	"type"=>1,
+	"img"=>$img,
+	"title"=>"Welcome",
+	"detail"=>"Give Kids the World recommends that you minimize the amount of luggage you bring. There are washers and dryers in each villa for your convenience, so please do not bring too much with you. It is customary to tip porters $1.00 for each piece of luggage and this can become very costly.",
+	"time"=>"3 Hour ago"
+	);    
+    $gcm_array[] = $did;
+	$gcm = new GCM();
+	
+    $result=$gcm->send_notification($gcm_array,$message1);	
+	//echo "<pre>"; print_r($gcm_array); echo "<br>";
+	//echo "<pre>"; print_r($message1); die;
+	
+	echo json_encode($message1);
+}
+function ios(){	
+	//$did = $_REQUEST['did'];
+	$did = '132179b38e99fbd961be08ca8ed4ac48eda72ab17fa4bda5caaf395c99f3b0c2';
+	$messagesArray[]=array(
+						'DeviceToken'=>$did, 
+						'Message'=>'Test',
+						'Badge'=>8, 
+						'Sound'=>'default',
+						'Type'=>'1',
+					);	
+	new_push_Notification($messagesArray); 
+	echo json_encode($messagesArray);
+}
+function new_push_Notification($messagesArray=array())
+{
+    $certificates = DataService::singleton()->getCertificates();
+    foreach($certificates as $certificate) {
+        if(count($messagesArray) == 0) {
+            continue;
+        }
+        $certificatePath='lib/service_classes/certificates/' .$certificate->KeyCertFile;
+        $server=DataService::singleton()->getCertificateServer($certificate->CertificateId, 1);
+        $apns=new apns($server->ServerUrl, $certificatePath, $certificate->Passphrase);
+        foreach($messagesArray as $message)
+        {
+            if($message['DeviceToken']!='')
+            {
+                 $apns->sendMessage($message['DeviceToken'], $message['Message'],$message['Badge'],$message['Sound'],$message['Nid'],$message['Img'],$message['Detail'],$message['Fid'],$message['Time'],$message['Type']); 
+            }
+        }
+        unset($apns);
+    }
+}
+function array_orderby()
+{
+	  $args = func_get_args();
+	  $data = array_shift($args);
+	  foreach ($args as $n => $field) {
+		  if (is_string($field)) {
+			  $tmp = array();
+			  foreach ($data as $key => $row)
+				  $tmp[$key] = $row[$field];
+			 	  $args[$n] = $tmp;
+			  }
+	  }
+	  $args[] = &$data;
+	  call_user_func_array('array_multisort', $args);
+	  return array_pop($args);
+}
+function encryptHash($val)
+{
+    return hash('SHA512', $val);
+}
+function superEncrypt($val)
+{
+    return encryptHash($val);
+}
+function create_random($length) {
+    $str = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqrstuvwxyz';
+    return substr(str_shuffle($str), 1, $length);
+}
+function removeNULL($input)
+{
+    $return = array();
+    foreach ($input as $key=>$val)
+    {
+        if(is_array($val)){ $return[$key] = removeNULL($val);	}
+        else {
+            if($val == NULL){$return[$key] = "";	}
+            else {	$return[$key] = $val;	}
+        }
+    }
+    return $return;
+}
+function get_all_tags($string,$find)
+{
+    $array  = explode($find,$string);
+    foreach($array as $myval)
+    {
+        $elements = explode(' ',$myval);
+        $my_array[] = $find.$elements[0];
+    }
+    return array_filter($my_array);
+}
+function create_color($length) {
+    //$str = 'ABCDEF1234567890';
+	$str = '0CD12AB';
+    return substr(str_shuffle($str), 1, $length);
+}
+function Login()
+{ 
+	$objData = new PCGData();	
+	$unique_id = $_REQUEST['unique_id'];
+	$platform = $_REQUEST['platform'];
+	$device_id = $_REQUEST['device_id'];
+	$isWelcome = $_REQUEST['isWelcome'];
+	$timezone = trim($_REQUEST['timezone']);	
+	if($unique_id == '')
+	{
+		$outputjson['status'] = '0';
+		$outputjson['msg'] = 'Please fill all required field';
+	}
+	else
+	{		
+		$arrUser = $objData->getAll("select * from  tbl_participant where unique_id = '".$_REQUEST['unique_id']."'");
+		$objData->getAll("update tbl_participant set device_id='' where parti_email='".$arrUser[0]['parti_email']."'");
+		$objData->getAll("update tbl_participant set device_id='' where device_id='".$device_id."'");
+		$objData->getAll("update tbl_participant set device_id='".$device_id."',platform='".$platform."' where unique_id = '".$_REQUEST['unique_id']."'");				
+		$ListArr=$objData->getAll("select *,b.file_2 as prof,a.id as formid from tbl_form as a Inner join tbl_participant as b on b.form_id=a.id where b.unique_id='".$unique_id."' order by a.child__Start_Date DESC");		
+		$existArr = $objData->getAll("select * from tbl_notification where noti_unique_code = '".$unique_id."' and noti_form_id = '".$ListArr[0]['formid']."' and noti_type='1'");	
+		if(count($ListArr)>0){
+					 if(count($existArr)=='0')
+					  {	  
+						  $Bring	  = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '2'");
+						  $noti_title = $Bring[0]['noti_title'];
+						  $noti_desc 	=  $Bring[0]['noti_desc'];
+						  $noti_image =  $Bring[0]['file_1'];
+						  $noti_time  =  time_diff($ListArr[0]['child__Start_Date'],$ListArr[0]['child_End_Date']);
+						  $noti_unique_code = $unique_id;
+						  $noti_form_id = $ListArr[0]['formid']; 
+						  $noti_cdate = date('Y-m-d H:i:s');
+						  
+						  $objData->getAll("insert into tbl_notification (noti_title,noti_desc,noti_image,noti_time,noti_unique_code,noti_form_id,noti_cdate,noti_type) values ('".$noti_title."','".$noti_desc."','".$noti_image."','".$noti_time."','".$noti_unique_code."','".$noti_form_id."','".$noti_cdate."','1')");	
+					  }					  
+					if($isWelcome=='1')
+					  {
+						  $Bring	  = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '2'");
+						  //$BringAll	  = $objData->getAll("select * from tbl_bring where `form_id` = '".$ListArr[0]['id']."'");	
+						  $did = $device_id;
+						  $date2 = date('Y-m-d H:i:s');
+						  $date1 = $Bring[0]['cdate'];
+						  $noti_title = $Bring[0]['noti_title'];
+						  
+						  if($ListArr[0]['platform']=='2'){
+						  $message1=array(
+						  "Id"=>$Bring[0]['nid'],	
+						  "img"=>$objData->SITEURL.'upload/'.$Bring[0]['file_1'],	
+						  "detail"=>$Bring[0]['noti_desc'],
+						  "title" =>$Bring[0]['noti_title'],
+						  "fid"=>$ListArr[0]['id'],
+						  //"time"=>time_diff($date1, $date2),
+						  "time"=>$date2,
+						  "type"=>1,		
+						  );  
+						  $gcm_array[] = $did;
+						  $gcm = new GCM();	
+						  $result=$gcm->send_notification($gcm_array,$message1);	
+						  }
+						  
+						  if($ListArr[0]['platform']=='1'){
+						  $messagesArray[]=array(
+							'DeviceToken'=>$device_id,
+							'Message'=>$Bring[0]['noti_title'],
+							'Badge'=>(int)count($Bring), 
+							'Sound'=>'default',
+							'Nid'=>$Bring[0]['nid'],
+							'Img'=>$objData->SITEURL.'upload/'.$Bring[0]['file_1'],	
+							'Detail'=>$Bring[0]['noti_desc'],							
+							'Fid'=>$ListArr[0]['id'],							
+							'Time'=>time_diff($date1, $date2),
+							'Type'=>'1'
+						); 
+						  }
+						if(count($messagesArray)>0)
+						{
+							new_push_Notification($messagesArray);
+						}
+						  	
+					}
+				}
+		//$old=$objData->getAll("select * from tbl_notification where noti_unique_code = '".$_REQUEST['unique_id']."' and noti_type NOT IN(21,22) order by noti_id desc");												
+		$old=$objData->getAll("select * from tbl_notification where noti_unique_code = '".$_REQUEST['unique_id']."' order by noti_id desc");												
+		if(count($arrUser)==0)
+		{
+			$outputjson['status'] = '3';
+			$outputjson['msg'] = 'Please enter correct code.'; 
+		}
+		
+		else if(count($old)>0)
+		{	 			 
+			 for($j=0;$j<count($old);$j++){ 			 
+			 
+				 $da['img']=$objData->SITEURL.'upload/'.$old[$j]['noti_image'];
+				 $da['title']=$old[$j]['noti_title'];
+				 $da['detail']=stripslashes($old[$j]['noti_desc']);
+				 $da['time']=$old[$j]['noti_cdate'];				 
+				 //$da['time']=$FinalTZ;				 
+				 if(date("Y-m-d") > date("Y-m-d",strtotime($ListArr[0]['child_End_Date']))){
+					 $da['isExpire'] = '0';
+				 }
+				 else{
+					 $da['isExpire'] = '1';
+				 }
+				 $arraData[]=$da;
+			 }
+			 $outputjson['status'] = '1';
+			 $outputjson['msg'] = 'Success';
+			 $outputjson['r'] = $arraData;
+		}
+		else
+		{
+			 $outputjson['status'] = '2';
+			 $outputjson['msg'] = 'Data not found.';
+			 $outputjson['r']	= array();		 
+		}	
+	}
+	$temp_outputjson = removeNULL($outputjson);
+	echo json_encode($temp_outputjson);
+}
+function Download_noti()
+{
+	$objData = new PCGData();		
+	$platform = $_REQUEST['platform'];
+	//$device_id = $_REQUEST['device_id'];
+	$imei_number = $_REQUEST['imei'];	
+	$existIMEI = $objData->getAll("select * from tbl_all_imeiNumbers where imei = '".$imei_number."'");	
+	$Bring	  = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '1'");						 
+	$did = $device_id;
+	$date2 = date('Y-m-d H:i:s');
+	$date1 = $Bring[0]['cdate'];
+	$noti_title = $Bring[0]['noti_title'];
+	
+	//if(count($existIMEI)=='0')
+    {
+		  $message1=array(
+		  "Id"=>$Bring[0]['nid'],	
+		  "img"=>$objData->SITEURL.'upload/'.$Bring[0]['file_1'],	
+		  "detail"=>$Bring[0]['noti_desc'],
+		  "title" => $Bring[0]['noti_title'],		  
+		  "time"=>time_diff($date1, $date2),
+		  "type"=>8,		
+		  );  	
+		  
+		  $EMEIArr = $objData->getAll("insert into tbl_all_imeiNumbers (imei,cdate,platform) values ('".$_REQUEST['imei']."','".date('Y-m-d H:i:s')."','".$platform."')");
+		  //echo "<pre>"; print_r($objData->getSQL()); die;			
+		  //$gcm_array[] = $did;
+		  //$gcm = new GCM();	
+		  //$result=$gcm->send_notification($gcm_array,$message1);		  
+		  $outputjson['status'] = '1';
+		  $outputjson['msg'] = 'Success';
+		  $NewArr[] = $message1;
+		  $outputjson['r'] = $NewArr;
+		  $strMessage = '<html> 
+							  <head> 
+							  <title>Make A Wish</title>
+							  </head>    
+							  <body>       
+							  <table style="width:100%;height:100%;background:#ccc;font-size:12px;font-family:Georgia,Arial,Helvetica,sans-serif;margin:0;padding:0">              <tbody>
+							  <tr> 
+							  <td><div style="color:#333;min-height:90%;background:#fafafa;text-align:center;width:600px;margin:10px auto;padding:20px 20px 10px">
+							  <div style="background:#fafafa;padding:15px 10px; border-bottom:solid 3px #000;">
+							  <a target="_blank" href="' . $objData->SITEURL . '"><img alt="" src="' . $objData->SITEURL . 'images/MAW_Logo_Canada.jpg" ></a>                      </div> 
+							  <div style="margin-top:20px;text-align:justify"> 
+							  <p>Dear Admin ,&nbsp;</p>
+							  <p>Application downloaded through this Device ID : '.$imei_number.'</p> 
+							  <p>Warmest regards,</p>
+							  <p><strong>Make-A-Wish® Team</strong></p> 
+							  </div>  
+							  <p height=30 style="background:#000; color:#fff; padding:10px 0; text-align:center; font-family:Arial, Helvetica, sans-serif; font-size:12px;"> &nbsp; &copy; ' . date('Y') . ' All Rights Reserved.</p>
+							  </div> 
+							  </td>
+							  </tr> 
+							  </tbody>
+							  </table>
+							  </body>
+							  </html>';
+							  $headers1   = "MIME-Version: 1.0" . "\r\n";
+							  $headers1 .= "Content-type:text/html;charset=iso-8859-1" . "\r\n";
+							  $headers1 .= 'From: ' . $imei_number;
+							  $strSub = "Make-A-Wish® Canada - new app download";
+							  $strTo  = $objData->INFO_MAIL;
+							  mail($strTo, $strSub, $strMessage, $headers1);	 
+		  
+  }
+  /*else
+  {
+	 $outputjson['status'] = '2';
+	 $outputjson['msg'] = 'IMEI Data already exist.';
+	 $outputjson['r']	= array();	
+  }*/
+  
+  $temp_outputjson = removeNULL($outputjson);
+  echo json_encode($temp_outputjson);
+  
+}
+function Notification_listing()
+{
+	$objData = new PCGData();
+	$unique_id = $_REQUEST['unique_id'];
+	$platform = $_REQUEST['platform'];
+	$device_id = $_REQUEST['device_id'];
+	if($unique_id == '')
+	{
+		$outputjson['status'] = '0';
+		$outputjson['msg'] = 'Please fill all required field';
+	}
+	else
+	{	
+		$ListArr = $objData->getAll("SELECT *  FROM `tbl_participant` WHERE `unique_id` = '".$unique_id."'");
+		$form_id = $ListArr[0]['form_id'];
+		$objData->getAll("update tbl_participant set device_id='' where parti_email='".$ListArr[0]['parti_email']."'");
+		$objData->getAll("update tbl_participant set device_id='' where device_id='".$device_id."'");
+		$objData->getAll("update tbl_participant set device_id='".$device_id."',platform='".$platform."' where unique_id = '".$unique_id."'");		
+		if(count($ListArr)>0)
+		{				
+			//CONFIRMATION NOTIFICATION
+			$confo_noti = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '2'");
+			$isExistConf = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='1'");
+			if(count($isExistConf)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$confo_noti[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$confo_noti[0]['file_1']);
+				$objData->setFieldValues("noti_desc",$confo_noti[0]['noti_desc']);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",date('Y-m-d H:i:s'));
+				$objData->setFieldValues("noti_type",1);
+				$objData->setFieldValues("noti_time",'06:00 am');				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->setFieldValues("forSorting",1);					
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//BRING
+			$Bring 	= $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_bring AS b ON a.id = b.form_id WHERE a.id = '".$ListArr[0]['form_id']."'");	$days_ago3 = date('Y-m-d', strtotime('-3 days', strtotime($Bring[0]['child__Start_Date'])));			
+			$days_ago7 = date('Y-m-d', strtotime('-7 days', strtotime($Bring[0]['child__Start_Date'])));			
+			$days_ago15 = date('Y-m-d', strtotime('-15 days', strtotime($Bring[0]['child__Start_Date'])));			
+			$aleradyExist = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$Bring[0]['form_id']."' and noti_type IN(2,4,5)");
+			if(count($aleradyExist)=='0'){
+			$i = 0;
+			for($i=1; $i<=3; $i++){	
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$Bring[0]['form_id']);
+				$objData->setFieldValues("noti_title","What to Bring?");							
+				$objData->setFieldValues("noti_img",$Bring[0]['file_3']);
+				$objData->setFieldValues("noti_desc",$Bring[0]['bring_desc']);
+				$objData->setFieldValues("noti_itemlist",$Bring[0]['Items_List']);
+				if($i==1){	 //-15day BRING
+					$objData->setFieldValues("noti_date",$days_ago15);
+					$objData->setFieldValues("noti_type",2);
+					$objData->setFieldValues("forSorting",2);
+				} 	
+				if($i==2){	//-7day BRING
+					$objData->setFieldValues("noti_date",$days_ago7);
+					$objData->setFieldValues("noti_type",4);
+					$objData->setFieldValues("forSorting",4);							 
+				} 	
+				if($i==3){	//-3day BRING
+					$objData->setFieldValues("noti_date",$days_ago3); 
+					$objData->setFieldValues("noti_type",5);
+					$objData->setFieldValues("forSorting",6);							
+				} 	
+				$objData->setFieldValues("noti_time",$Bring[0]['child_start_time']);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');							
+				$objData->insert();			
+				$intLastId = $objData->intLastInsertedId;			
+			}
+		}
+			
+			//Imp number 7 Days
+			$ImpFormArr = $objData->getAll("select * from tbl_form where id = '".$form_id."'");
+			$Impdays_ago7 = date('Y-m-d', strtotime('-7 days', strtotime($ImpFormArr[0]['child__Start_Date'])));
+			$impNumberArr = $objData->getAll("select * from tbl_welcm_noti where noti_status='5'");
+			$ExistFeedback = $objData->getAll("select * from tbl_send_local_noti where form_id='".$form_id."' and noti_type='28'");
+			if(count($ExistFeedback)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$impNumberArr[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$impNumberArr[0]['file_1']);
+				$objData->setFieldValues("noti_desc",trim($ImpFormArr[0]['imp_no']));
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Impdays_ago7);
+				$objData->setFieldValues("noti_type",28);
+				$objData->setFieldValues("forSorting",5);
+				$objData->setFieldValues("noti_time",'06:00 am');				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');				
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}	
+			
+			//Imp number 1 Days
+			//$ImpFormArr = $objData->getAll("select * from tbl_form where id = '".$form_id."'");
+			$Impdays_ago1 = date('Y-m-d', strtotime('-1 days', strtotime($ImpFormArr[0]['child__Start_Date'])));
+			//$impNumberArr = $objData->getAll("select * from tbl_welcm_noti where noti_status='5'");
+			$ExistFeedback = $objData->getAll("select * from tbl_send_local_noti where form_id='".$form_id."' and noti_type='29'");
+			if(count($ExistFeedback)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$impNumberArr[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$impNumberArr[0]['file_1']);
+				$objData->setFieldValues("noti_desc",trim($ImpFormArr[0]['imp_no']));
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Impdays_ago1);
+				$objData->setFieldValues("noti_type",29);
+				$objData->setFieldValues("forSorting",13);
+				$objData->setFieldValues("noti_time",'06:00 am');				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');				
+				$objData->insert();		
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//SPENDING MONEY
+		$SpendingM 	= $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_spending AS b ON a.id = b.form_id WHERE a.id = '".$form_id."'");			
+			$Spend_ago3 = date('Y-m-d', strtotime('-3 days', strtotime($SpendingM[0]['child__Start_Date'])));						
+			$Spend_ago15 = date('Y-m-d', strtotime('-15 days', strtotime($SpendingM[0]['child__Start_Date'])));						
+			$SpendExist = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type IN(3,7)");
+			if(count($SpendExist)=='0'){
+			$j = 0;
+			for($j=1; $j<=2; $j++){	
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title","Spending Money");							
+				$objData->setFieldValues("noti_img",$SpendingM[0]['file_5']);
+				$objData->setFieldValues("noti_desc",trim($SpendingM[0]['spend_money']));
+				$objData->setFieldValues("noti_itemlist",'');
+				if($j==1){	 //-15day BRING 
+					$objData->setFieldValues("noti_date",$Spend_ago15);
+					$objData->setFieldValues("noti_type",3);
+					$objData->setFieldValues("forSorting",3);
+				} 	
+				if($j==2){	//-3day BRING
+					$objData->setFieldValues("noti_date",$Spend_ago3);
+					$objData->setFieldValues("noti_type",7);
+					$objData->setFieldValues("forSorting",8);							 
+				} 	
+				
+				$objData->setFieldValues("noti_time",$SpendingM[0]['child_start_time']);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');							
+				$objData->insert();			
+				$intLastId = $objData->intLastInsertedId;			
+			}
+		}	
+		
+			//WEATHER NOTIFICATION
+			$WeatherArr=$objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_weather AS b ON a.id = b.form_id WHERE a.id = '".$form_id."'");			
+			$W_days_ago1 = date('Y-m-d', strtotime('-1 days', strtotime($WeatherArr[0]['child__Start_Date'])));			
+			$W_days_ago2 = date('Y-m-d', strtotime('-2 days', strtotime($WeatherArr[0]['child__Start_Date'])));			
+			$W_days_ago3 = date('Y-m-d', strtotime('-3 days', strtotime($WeatherArr[0]['child__Start_Date'])));			
+			$aleradyExist = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$WeatherArr[0]['form_id']."' and noti_type IN(6,8,9)");
+			if(count($aleradyExist)=='0'){
+			$k = 0;
+			for($k=1; $k<=3; $k++){	
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$WeatherArr[0]['form_id']);
+				$objData->setFieldValues("noti_title","Weather Reccomendations");							
+				$objData->setFieldValues("noti_img",$WeatherArr[0]['file_4']);
+				$objData->setFieldValues("noti_desc",$WeatherArr[0]['weather_rec']);				
+				if($k==1){	 //-3day Weather
+					$objData->setFieldValues("noti_date",$W_days_ago3);
+					$objData->setFieldValues("noti_type",6);
+					$objData->setFieldValues("forSorting",7);
+				} 	
+				if($k==2){	//-2day Weather
+					$objData->setFieldValues("noti_date",$W_days_ago2);
+					$objData->setFieldValues("noti_type",8);
+					$objData->setFieldValues("forSorting",9);							 
+				} 	
+				if($k==3){	//-1day Weather
+					$objData->setFieldValues("noti_date",$W_days_ago1); 
+					$objData->setFieldValues("noti_type",9);
+					$objData->setFieldValues("forSorting",10);							
+				} 	
+				$objData->setFieldValues("noti_time",$WeatherArr[0]['child_start_time']);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');							
+				$objData->insert();			
+				$intLastId = $objData->intLastInsertedId;			
+			}
+		}
+			
+			//Send-off message
+			$Send_offMsg = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '3'");
+			$isExistSendoff = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='10'");
+			
+			$FormArr = $objData->getAll("select * from tbl_form where id = '".$form_id."'");
+			$SendMsg_ago1 = date('Y-m-d', strtotime('-1 days', strtotime($FormArr[0]['child__Start_Date'])));			
+			
+			if(count($isExistSendoff)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$Send_offMsg[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$Send_offMsg[0]['file_1']);
+				$objData->setFieldValues("noti_desc",$Send_offMsg[0]['noti_desc']);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$SendMsg_ago1);
+				$objData->setFieldValues("noti_type",10);
+				$objData->setFieldValues("forSorting",11);
+				$objData->setFieldValues("noti_time",'06:00 am');				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');	
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}					
+			
+			//Pickup notification(TYPE=11)
+		$DepatureArr2 = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_departure AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");
+		$PickMsg_ago = date('Y-m-d', strtotime('-1 days', strtotime($DepatureArr2[0]['pickup_date'])));	
+			$PickupNoti = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '7'");
+			$isExistPkup = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='11'");
+			
+			$pickDesc1 = 'Your ride to airport will be at your place tomorrow at '.$DepatureArr2[0]['pickup_time'].' '.$DepatureArr2[0]['pickup_date'];
+			$pickDesc1 = $PickupNoti[0]['noti_desc'];
+			$pickDesc1 =  str_repeat("[pickup_time]",$DepatureArr2[0]['pickup_time'],$pickDesc1);
+			$pickDesc1 = str_repeat("[pickup_date]",$DepatureArr2[0]['pickup_date'],$pickDesc1);
+			$pickDesc2 = $DepatureArr2[0]['special_instruct'];
+			$pickDescAll = $pickDesc1 .' <br/> <b>Special Instructions</b> '. $pickDesc2;
+			
+			if(count($isExistPkup)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$PickupNoti[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$PickupNoti[0]['file_1']);
+				$objData->setFieldValues("noti_desc",$pickDescAll);				
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$PickMsg_ago);
+				$objData->setFieldValues("noti_type",11);
+				$objData->setFieldValues("forSorting",12);
+				$objData->setFieldValues("noti_time",$DepatureArr2[0]['pickup_time']);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//Departure Day(TYPE=12)
+		$DepatureArr1 = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_departure AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");
+			$PickDate = $DepatureArr1[0]['pickup_date'];
+			$PickTime = date("H:i:s",strtotime($DepatureArr1[0]['pickup_time']));
+			$MergeDT = $PickDate.' '.$PickTime;
+			$PickTS = strtotime($MergeDT);
+			$FinalDT =  $PickTS-3600; 
+			$Notidate =  date("Y-m-d", ($FinalDT) ); 
+			$NotiTime =  date("h:i a", ($FinalDT) );
+
+			$PickupNoti = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '8'");
+			
+			$pickDesc_1 = 'Your ride to airport will be at your place today at '.$DepatureArr2[0]['pickup_time'].' '.$DepatureArr2[0]['pickup_date'];
+			$pickDesc_1 = $PickupNoti[0]['noti_desc'];
+			$pickDesc_1 =  str_repeat("[pickup_time]",$DepatureArr2[0]['pickup_time'],$pickDesc_1);
+			$pickDesc_1 = str_repeat("[pickup_date]",$DepatureArr2[0]['pickup_date'],$pickDesc_1);
+			$pickDesc_2 = $DepatureArr2[0]['special_instruct'];
+			$pickDescAll_1 = $pickDesc_1 .' <br/> <b>Special Instructions</b> '. $pickDesc_2;
+			
+			$isExistDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='12'");
+			if(count($isExistDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$PickupNoti[0]['noti_title']);
+				//$objData->setFieldValues("noti_img",$DepatureArr1[0]['file_6']);
+				$objData->setFieldValues("noti_img",$PickupNoti[0]['file_1']);
+				//$objData->setFieldValues("noti_desc",'Your ride to airport will be at '.$DepatureArr1[0]['pickup_time'].' '.$PickDate);
+				$objData->setFieldValues("noti_desc",$pickDescAll_1);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Notidate);
+				$objData->setFieldValues("noti_type",12);
+				$objData->setFieldValues("forSorting",14);
+				$objData->setFieldValues("noti_time",$NotiTime);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//FLIGHT DETAIL(TYPE=13)
+			$PickupNoti = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '9'");
+			$DepDate = $DepatureArr1[0]['pickup_date'];
+			$DepaTime = date("H:i:s",strtotime($DepatureArr1[0]['departure_time']));			
+			$MergeDT1 = $DepDate.' '.$DepaTime;			
+			$PickTS1 = strtotime($MergeDT1);
+			$FinalDT1 =  $PickTS1-9000; 								
+			$Notidate1 =  date("Y-m-d", ($FinalDT1) ); 
+			$NotiTime1 =  date("h:i a", ($FinalDT1) ); 			
+			$isExistDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='13'");
+			
+			$desc1 = trim($DepatureArr1[0]['flight_details']);
+			$desc2 = trim($PickupNoti[0]['noti_desc']);
+			$descAll = $desc1.' <br/> '.$desc2;
+			//echo $descAll; die;
+			if(count($isExistDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",trim($PickupNoti[0]['noti_title']));
+				$objData->setFieldValues("noti_img",$PickupNoti[0]['file_1']);
+				//$objData->setFieldValues("noti_desc",trim($DepatureArr1[0]['flight_details']));
+				$objData->setFieldValues("noti_desc",$descAll);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Notidate1);
+				$objData->setFieldValues("noti_type",13);
+				$objData->setFieldValues("forSorting",15);
+				$objData->setFieldValues("noti_time",$NotiTime1);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//REMINDER 45 MIN
+			/*$RemDate = $DepatureArr1[0]['pickup_date'];
+			$RemTime = date("H:i:s",strtotime($DepatureArr1[0]['departure_time']));			
+			$MergeDT2 = $RemDate.' '.$RemTime;			
+			$PickTS2 = strtotime($MergeDT2);
+			$FinalDT2 =  $PickTS2-2700; 								
+			$Notidate2 =  date("Y-m-d", ($FinalDT2) ); 
+			$NotiTime2 =  date("h:i a", ($FinalDT2) ); 			
+			$isExistDep2 = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='14'");
+			if(count($isExistDep2)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Please reach to the gate 45 mins prior to departure time');	
+				$objData->setFieldValues("noti_img",$DepatureArr1[0]['file_6']);
+				$objData->setFieldValues("noti_desc",trim($DepatureArr1[0]['flight_details']));
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Notidate2);
+				$objData->setFieldValues("noti_type",14);
+				$objData->setFieldValues("forSorting",15);
+				$objData->setFieldValues("noti_time",$NotiTime2);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			*/
+			
+			//LANDING NOTIFICATION
+			$LandDate = $DepatureArr1[0]['pickup_date'];
+			$LandTime = $DepatureArr1[0]['arrival_time'];
+			$isExistDep3 = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='15'");
+			
+			//$content = "this is something with an <img src=\"test.png\"/> in it.";
+    		$content = preg_replace("/<img[^>]+\>/i", " ", $DepatureArr1[0]['flight_instruction']); 
+			
+			if(count($isExistDep3)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Landed Notification');							
+				$objData->setFieldValues("noti_img",$DepatureArr1[0]['file_6']);
+				//$objData->setFieldValues("noti_desc",trim($DepatureArr1[0]['flight_instruction']));
+				$objData->setFieldValues("noti_desc",trim($content));
+				//$objData->setFieldValues("noti_desc",'You have landed. A greeter will meet you upon landing and escort you to your luggage and your transportation');				
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$LandDate);
+				$objData->setFieldValues("noti_type",15);
+				$objData->setFieldValues("forSorting",17);
+				$objData->setFieldValues("noti_time",$LandTime);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//ORIENTATION NOTI
+			$OrientArr = $objData->getAll("SELECT * FROM tbl_orientation WHERE form_id = '".$form_id."'");
+			$OrienStartDate = date('Y-m-d',strtotime($FormArr[0]['child__Start_Date'])); 
+			$OrienStartTime1 = date("H:i:s",strtotime($OrientArr[0]['orientation_time1']));
+			$OrienStartTime2 = date("H:i:s",strtotime($OrientArr[0]['orientation_time2']));
+			$OrienStartTime3 = date("H:i:s",strtotime($OrientArr[0]['orientation_time3']));
+						
+			$Merge_DT1 = $OrienStartDate.' '.$OrienStartTime1;
+			$Merge_DT2 = $OrienStartDate.' '.$OrienStartTime2;
+			$Merge_DT3 = $OrienStartDate.' '.$OrienStartTime3;			
+			
+			//echo $Merge_DT1; echo "<br>";
+			//echo $Merge_DT2; echo "<br>";
+			//echo $Merge_DT3; echo "<br>"; 
+			
+			$OR1 = strtotime($Merge_DT1); $OR2 = strtotime($Merge_DT2);	$OR3 = strtotime($Merge_DT3);			
+			$Final_DT1 =$OR1-3600; 		  $Final_DT2 =$OR2-3600;        $Final_DT3 =$OR3-3600;			
+			//echo $OR1.' , '.$OR2.' , '.$OR3; echo "<br>";
+			//echo $Final_DT1.' , '.$Final_DT2.' , '.$Final_DT3; echo "<br>";
+			//die;			
+			$Notidate_1 =  date("Y-m-d", ($Final_DT1) ); 
+			$NotiTime_1 =  date("h:i a", ($Final_DT1) ); 			
+			//echo $Notidate_1.' , '.$NotiTime_1; echo "<br>";			
+			$Notidate_2 =  date("Y-m-d", ($Final_DT2) ); 
+			$NotiTime_2 =  date("h:i a", ($Final_DT2) ); 			
+			//echo $Notidate_2.' , '.$NotiTime_2; echo "<br>";						
+			$Notidate_3 =  date("Y-m-d", ($Final_DT3) ); 
+			$NotiTime_3 =  date("h:i a", ($Final_DT3) ); 			
+			//echo $Notidate_3.' , '.$NotiTime_3; echo "<br>";die;			
+			 $var1 = $Notidate_1 .','. $Notidate_2. ','.$Notidate_3;
+		     $var2 = $NotiTime_1 .','. $NotiTime_2. ','.$NotiTime_3;
+			 //echo $var1; echo "<br>";
+			 //echo $var2; die;			 
+			$isExistOrient = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='16'");
+			$tbl_orientation=$objData->getAll("SELECT * FROM tbl_orientation WHERE for_admin=0 AND dayId=1");
+			
+			//$day2type17 = date('Y-m-d',strtotime('+1 day', strtotime($DepatureArr2[0]['flight_Start_Date']))); //'+1 day', strtotime($date))
+			$day2type16 = date('Y-m-d',strtotime('+1 day', strtotime($FormArr[0]['child__Start_Date']))); //'+1 day', strtotime($date))
+			
+			if(count($isExistOrient)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Orientation Day');							
+				//$objData->setFieldValues("noti_img",$OrientArr[0]['file_10']);
+				$objData->setFieldValues("noti_img",$tbl_orientation[0]['noti_image']);
+				$objData->setFieldValues("noti_desc",trim($OrientArr[0]['orientation_text']));
+				$objData->setFieldValues("noti_itemlist",'');
+				//$objData->setFieldValues("noti_date",$LandDate);
+				$objData->setFieldValues("noti_type",16);
+				$objData->setFieldValues("forSorting",18);
+				//$objData->setFieldValues("noti_time",$LandTime);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//REGULAR DAY START REMAINING
+			$regularDay = $objData->getAll("SELECT * FROM `tbl_regular_day`");
+			$isExistRegular = $objData->getAll("select * from tbl_send_local_noti where form_id='".$form_id."' and noti_type='17'");
+			//$DepatureArr2 = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_departure AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");
+			$day2 = $DepatureArr2[0]['flight_Start_Date'];
+			$day2type17 = date('Y-m-d',strtotime('+1 day', strtotime($DepatureArr2[0]['flight_Start_Date']))); //'+1 day', strtotime($date))
+			if(count($isExistRegular)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$regularDay[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$regularDay[0]['noti_image']);
+				$objData->setFieldValues("noti_desc",$regularDay[0]['regular_desc']);
+				$objData->setFieldValues("noti_itemlist",'');
+				//$objData->setFieldValues("noti_date",$FormArr[0]['child__Start_Date']);
+				$objData->setFieldValues("noti_date",$day2type16);
+				$objData->setFieldValues("noti_type",17);
+				$objData->setFieldValues("forSorting",19);
+				$objData->setFieldValues("noti_time",'06:00 am');				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();	
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			//REGULAR DAY END
+			
+			
+			//DAY BEFORE DEPARTURE
+			$BeforeDepArr = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_dep AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");
+			$Date_day = date('Y-m-d',strtotime('-1 day', strtotime($BeforeDepArr[0]['seaworld_date']))); //'+1 day', strtotime($date))
+			//echo $Date_day; die;
+			$Time_day = $BeforeDepArr[0]['seaworld_time']; 
+			$ExistBefDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='18'");
+			
+			$descr1 = trim($BeforeDepArr[0]['flight_details']);
+			$descr2 = trim($BeforeDepArr[0]['dept_special_instruct']);
+			$descrAll = $descr1 . '<br/>' . $descr2;
+			
+			if(count($ExistBefDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				//$objData->setFieldValues("noti_title",'Checkout time and Special Instructions');	
+				$objData->setFieldValues("noti_title",'Checkout time and Special Instructions for tomorrow');										
+				$objData->setFieldValues("noti_img",$BeforeDepArr[0]['file_17']);
+				//$objData->setFieldValues("noti_desc",trim($BeforeDepArr[0]['flight_details']));
+				//$objData->setFieldValues("noti_desc",$descrAll);
+				$objData->setFieldValues("noti_desc",$descr2);
+				$objData->setFieldValues("noti_itemlist",'');
+				//$objData->setFieldValues("noti_itemlist",trim($BeforeDepArr[0]['dept_special_instruct']));
+				$objData->setFieldValues("noti_date",$Date_day);
+				$objData->setFieldValues("noti_type",18);
+				$objData->setFieldValues("forSorting",20);
+				$objData->setFieldValues("noti_time",$Time_day);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//PACKING REMINDER
+			/*$ExistBefDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='19'");
+			if(count($ExistBefDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'PACKING REMINDER');							
+				$objData->setFieldValues("noti_img",$BeforeDepArr[0]['file_17']);
+				$objData->setFieldValues("noti_desc",'PACKING REMINDER');
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Date_day);
+				$objData->setFieldValues("noti_type",19);
+				$objData->setFieldValues("forSorting",20);
+				$objData->setFieldValues("noti_time",$Time_day);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}*/
+						
+			//AITPORT DETAIL AND FLIGHT NUMBER						
+			/*$ExistBefDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='20'");
+			if(count($ExistBefDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Airport details and flight number');							
+				$objData->setFieldValues("noti_img",$BeforeDepArr[0]['file_17']);
+				$objData->setFieldValues("noti_desc",trim($BeforeDepArr[0]['flight_details']));
+				$objData->setFieldValues("noti_itemlist",trim($BeforeDepArr[0]['dept_special_instruct']));
+				$objData->setFieldValues("noti_date",$Date_day);
+				$objData->setFieldValues("noti_type",20);
+				$objData->setFieldValues("forSorting",21);
+				$objData->setFieldValues("noti_time",$Time_day);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}*/
+			
+			//Reminder to call airline
+			$ExistBefDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='21'");
+			$desc21 = trim($BeforeDepArr[0]['flight_details']);
+			$desc211 = trim($BeforeDepArr[0]['dept_special_instruct']);
+			$descAll211 = $desc21.'<br/>'.$desc211; 
+			//echo $descAll211; die;
+			if(count($ExistBefDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				//$objData->setFieldValues("noti_title",'Reminder to call airline');							
+				$objData->setFieldValues("noti_title",'Flight number and Details for tomorrow');							
+				$objData->setFieldValues("noti_img",$BeforeDepArr[0]['file_17']);
+				//$objData->setFieldValues("noti_desc",'Please call airline to check for any delay or cancellation in your flight.');
+				$objData->setFieldValues("noti_desc",$descAll211);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Date_day);
+				$objData->setFieldValues("noti_type",21);
+				$objData->setFieldValues("forSorting",23);
+				$objData->setFieldValues("noti_time",$Time_day);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+				
+			//Departure Date(LAST ONE)
+			$dep_last = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_dep AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");	//
+			$dep_Date = date('Y-m-d',strtotime($dep_last[0]['seaworld_date']));
+			$dep_Time = $dep_last[0]['seaworld_time'];
+			$Mrg_deplast = $dep_Date.' '.$dep_Time;
+			$strto_deplast = strtotime($Mrg_deplast);
+			$F_dep_lst = $strto_deplast-3600;			
+			$Noti_date3 =  date("Y-m-d", ($F_dep_lst) ); 
+			$Noti_Time3 =  date("h:i a", ($F_dep_lst) ); 
+			$ExistDep_Last = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='22'");
+			if(count($ExistDep_Last)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Checkout time and Special Instructions');							
+				$objData->setFieldValues("noti_img",$dep_last[0]['file_17']);
+				//$objData->setFieldValues("noti_desc",'Notification reminding them to check out one hr before the checkout time.');
+				$objData->setFieldValues("noti_desc",$BeforeDepArr[0]['dept_special_instruct']);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Noti_date3);
+				$objData->setFieldValues("noti_type",22);
+				$objData->setFieldValues("forSorting",24);
+				$objData->setFieldValues("noti_time",$Noti_Time3);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//TYPE=23
+			$dep_Date4 = date('Y-m-d',strtotime($dep_last[0]['Flight_Start_Date1']));
+			$dep_Time4 = $dep_last[0]['departure_time'];
+			$Mrg_deplast4 = $dep_Date4.' '.$dep_Time4;
+			$strto_deplast4 = strtotime($Mrg_deplast4);			
+			//$F_dep_lst4 = $strto_deplast4-9000;			
+			$F_dep_lst4 = $strto_deplast4-10800;			
+			$Noti_date4 =  date("Y-m-d", ($F_dep_lst4) ); 
+			$Noti_Time4 =  date("h:i a", ($F_dep_lst4) ); 			
+			$ExistDep_Last4 = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='23'");
+			if(count($ExistDep_Last4)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Airport details and flight number');							
+				$objData->setFieldValues("noti_img",$dep_last[0]['file_17']);
+				//$objData->setFieldValues("noti_desc",'Notification to remind them to reach airport 2.5 hrs before departure');
+				$objData->setFieldValues("noti_desc",$descAll211);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Noti_date4);
+				$objData->setFieldValues("noti_type",23);
+				$objData->setFieldValues("forSorting",25);
+				$objData->setFieldValues("noti_time",$Noti_Time4);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			/*$dep_last = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_dep AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");	
+			//echo $dep_last[0]['flight_details']; die;
+			$ExistDep_Last = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='24'");
+			if(count($ExistDep_Last)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Check-In and flight details notification');							
+				$objData->setFieldValues("noti_img",$dep_last[0]['file_17']);
+				$objData->setFieldValues("noti_desc",trim($dep_last[0]['flight_details']));
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",date('Y-m-d',strtotime($dep_last[0]['Flight_Start_Date1'])));
+				$objData->setFieldValues("noti_type",24);
+				$objData->setFieldValues("forSorting",25);
+				$objData->setFieldValues("noti_time",$dep_last[0]['departure_time']);	//check in Time			
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}	*/
+			
+			//TYPE=25
+			$ExistDep_Last = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='25'");
+			if(count($ExistDep_Last)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Getting home!');							
+				$objData->setFieldValues("noti_img",$dep_last[0]['file_17']);
+				//$objData->setFieldValues("noti_desc",'Check-In and flight details notification');
+				$objData->setFieldValues("noti_desc",$dep_last[0]['wel_home']);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",date('Y-m-d',strtotime($dep_last[0]['Flight_Start_Date1'])));
+				$objData->setFieldValues("noti_type",25);
+				$objData->setFieldValues("forSorting",27);
+				$objData->setFieldValues("noti_time",$dep_last[0]['arrival_time']);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}	
+			
+			//Thank You Notification
+			$dep_Date5 = date('Y-m-d',strtotime($dep_last[0]['Flight_Start_Date1']));
+			$dep_Time5 = $dep_last[0]['arrival_time'];						
+			$Mrg_deplast5 = $dep_Date5.' '.$dep_Time5;
+			$strto_deplast5 = strtotime($Mrg_deplast5);			
+			$F_dep_lst5 = $strto_deplast5+7200;			
+			$Noti_date5 =  date("Y-m-d", ($F_dep_lst5) ); 
+			$Noti_Time5 =  date("h:i a", ($F_dep_lst5) );
+			
+			$ThankNoti = $objData->getAll("select * from tbl_welcm_noti where noti_status = '6'");
+			 	
+			$ExistDep_Last5 = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='26'");
+			if(count($ExistDep_Last5)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$ThankNoti[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$ThankNoti[0]['file_1']);
+				$objData->setFieldValues("noti_desc",$ThankNoti[0]['noti_desc']);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Noti_date5);
+				$objData->setFieldValues("noti_type",26);
+				$objData->setFieldValues("forSorting",28);
+				$objData->setFieldValues("noti_time",$Noti_Time5);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}			
+			
+			//Feedback 
+			$dep_last = $objData->getAll("SELECT a.*,b.* FROM tbl_form AS a INNER JOIN tbl_dep AS b ON a.id = b.form_id WHERE a.id='".$form_id."'");	//
+			$feedbk_Date = date('Y-m-d',strtotime($dep_last[0]['Flight_Start_Date1']));
+			$feedbk__Time = $dep_last[0]['arrival_time'];						
+			$Mrg_feedbk = $feedbk_Date.' '.$feedbk__Time;
+			$strto_feedbk = strtotime($Mrg_feedbk);			
+			$Fdbk_lst = $strto_feedbk+172800;			
+			$feedBack_Fdate =  date("Y-m-d", ($Fdbk_lst) ); 
+			$feedBack_Ftime =  date("h:i a", ($Fdbk_lst) );
+			
+			$FeedbackArr = $objData->getAll("select * from tbl_feedback where noti_status='27'");
+			$ExistFeedback = $objData->getAll("select * from tbl_send_local_noti where form_id='".$form_id."' and noti_type='27'");
+			if(count($ExistFeedback)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$FeedbackArr[0]['noti_title']);							
+				$objData->setFieldValues("noti_img",$FeedbackArr[0]['noti_image']);
+				$objData->setFieldValues("noti_desc",$FeedbackArr[0]['noti_desc']);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$feedBack_Fdate);
+				$objData->setFieldValues("noti_type",27);
+				$objData->setFieldValues("forSorting",29);
+				$objData->setFieldValues("noti_time",$feedBack_Ftime);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}	
+			
+			
+			//HOTEL NOTIFICATION
+			$Hotel = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '10'");
+			$HotelArr = $objData->getAll("SELECT * FROM `tbl_hotel` WHERE `form_id` = '".$form_id."'");
+			$ExistHotelArr = $objData->getAll("select * from tbl_send_local_noti where form_id='".$form_id."' and noti_type='30'");
+			
+			$chkoutDate = date('Y-m-d',strtotime($BeforeDepArr[0]['seaworld_date']));
+		    $chkoutTime = date('H:i a',strtotime($BeforeDepArr[0]['seaworld_time']));
+			
+			$chkoutDate_Time = $chkoutDate .' '. $chkoutTime;
+			
+			$hotelname = $HotelArr[0]['hotel_name'];
+			$hotelConfirmation = $HotelArr[0]['confirmation'];
+			$hotel_address = $HotelArr[0]['hotel_address'];			
+			$checkIN_dateTime = date('Y-m-d',strtotime($HotelArr[0]['check_in_date'])).' '.$HotelArr[0]['check_in_time'];
+			//$checkOUT_dateTime = date('Y-m-d',strtotime($HotelArr[0]['check_out_date']));						
+			$descHotelAll = '<b>Hotel name : </b>'. $hotelname .'<br/><b>Confirmation number : </b>'. $hotelConfirmation .'<br/><b>Hotel Address :</b>'.$hotel_address .'<br/><b>Check-in date and time : </b>'.$checkIN_dateTime .'<br/><b>Check-out date and time : </b>'.$chkoutDate_Time;
+
+			$descHotelAll = $Hotel[0]['noti_desc'];
+
+			$descHotelAll = str_replace("[hotelname]",$hotelname,$descHotelAll);
+			$descHotelAll = str_replace("[hotelConfirmation]",$hotelConfirmation,$descHotelAll);
+			$descHotelAll = str_replace("[hotel_address]",$hotel_address,$descHotelAll);
+			$descHotelAll = str_replace("[checkIN_dateTime]",$checkIN_dateTime,$descHotelAll);
+			$descHotelAll = str_replace("[chkoutDate_Time]",$chkoutDate_Time,$descHotelAll);
+
+			if(count($ExistHotelArr)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",$Hotel[0]['noti_title']);
+				$objData->setFieldValues("noti_img",$Hotel[0]['file_1']);
+				$objData->setFieldValues("noti_desc",$descHotelAll);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$Notidate);
+				$objData->setFieldValues("noti_type",30);
+				$objData->setFieldValues("forSorting",30);
+				$objData->setFieldValues("noti_time",$NotiTime);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}
+			
+			//FLIGHT DETAIL(TYPE=31)
+			$flightDate31 = date('Y-m-d',strtotime('-1 day', strtotime($DepatureArr1[0]['pickup_date'])));
+			$flightTime31 = date("h:i a",strtotime($DepatureArr1[0]['departure_time']));								
+			$isExistDep = $objData->getAll("select * from tbl_send_local_noti where form_id = '".$form_id."' and noti_type='31'");			
+			$desc1 = trim($DepatureArr1[0]['flight_details']);
+			$desc2 = "<ul><li>Make sure all your bags are labeled with your name and address.</li>
+	<li>Please reach at the gate 45 mins prior to departure time.</li>
+	<li>Call or check on-line 24 hours ahead of flight to check status.</li> 
+  </ul>";
+			$descAll = $desc1.' <br/> '.$desc2;
+			if(count($isExistDep)=='0')
+			{
+				$objData->setTableDetails("tbl_send_local_noti","nid"); 			
+				$objData->setFieldValues("form_id",$form_id);
+				$objData->setFieldValues("noti_title",'Flight number and Details for tomorrow');							
+				$objData->setFieldValues("noti_img",$DepatureArr1[0]['file_6']);
+				$objData->setFieldValues("noti_desc",$descAll);
+				$objData->setFieldValues("noti_itemlist",'');
+				$objData->setFieldValues("noti_date",$flightDate31);
+				$objData->setFieldValues("noti_type",31);
+				$objData->setFieldValues("forSorting",31);
+				$objData->setFieldValues("noti_time",$flightTime31);				
+				$objData->setFieldValues("status",'1');
+				$objData->setFieldValues("isDaily",'0');
+				$objData->insert();			
+				$intLastId1 = $objData->intLastInsertedId;
+			}	
+				
+			//NOTIFICATION LISTING
+			//$NotiList = $objData->getAll("SELECT *  FROM `tbl_send_local_noti` WHERE form_id = '".$form_id."' order by noti_type asc");
+			$NotiList = $objData->getAll("SELECT *  FROM `tbl_send_local_noti` WHERE form_id = '".$form_id."' and noti_type NOT IN('3') order by forSorting asc");
+			if(count($NotiList)>0)
+			{		
+				$ConfirmNoti = $objData->getAll("SELECT * FROM tbl_welcm_noti WHERE noti_status='2'");
+				$Bring15 = $objData->getAll("SELECT * FROM `tbl_bring` where dayId='15'");
+				$Spend15 = $objData->getAll("SELECT * FROM `tbl_spending` where dayId='15'");
+				$Bring7 = $objData->getAll("SELECT * FROM `tbl_bring` where dayId='7'");
+				$Bring3 = $objData->getAll("SELECT * FROM `tbl_bring` where dayId='3'");
+				$Weather3 = $objData->getAll("SELECT * FROM `tbl_weather` where dayId='3'");
+				$Spending3 = $objData->getAll("SELECT * FROM `tbl_spending` where dayId='3'");
+				$Weather2 = $objData->getAll("SELECT * FROM `tbl_weather` where dayId='2'");
+				$Weather1 = $objData->getAll("SELECT * FROM `tbl_weather` where dayId='1'");
+				$Send_offMsg = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '3'");
+				$PickupNoti = $objData->getAll("select * from tbl_welcm_noti where `noti_status` = '4'");
+				foreach($NotiList as $StrVal){					
+				$valueArrTMArr = array();				
+					$valueArr['nid']  	 = $StrVal['nid'];  			
+					$valueArr['fid']  	 = $StrVal['form_id'];  
+					$valueArr['ttl'] 	 = stripslashes($StrVal['noti_title']);	  			
+					$valueArr['img'] 	 = $objData->SITEURL.'upload/'.$StrVal['noti_img'];	  			
+					$valueArr['desc'] 	 = stripslashes($StrVal['noti_desc']);					
+					$valueArr['itllst']  = stripslashes($StrVal['noti_itemlist']);
+					$valueArr['date'] 	 = $StrVal['noti_date'];
+					$valueArr['time'] 	 = $StrVal['noti_time'];
+					$valueArr['type'] 	 = $StrVal['noti_type'];
+					$valueArr['forSorting']  = $StrVal['forSorting'];
+					$valueArr['sts'] 	 = $StrVal['status'];
+					$valueArr['isDaily']  = $StrVal['isDaily'];											
+					
+					if($StrVal['noti_time']=='')
+					{
+						$valueArr['time'] 	 = "06:00 am";
+					}
+					if($StrVal['noti_type']=='1' && $ConfirmNoti[0]['noti_title']!='')
+					{
+						$valueArr['ttl'] = stripslashes($ConfirmNoti[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$ConfirmNoti[0]['file_1'];	
+					}
+					if($StrVal['noti_type']=='2' && $Bring15[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Bring15[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Bring15[0]['noti_image'];						
+					}
+					if($StrVal['noti_type']=='3' && $Spend15[0]['noti_title']!='')
+					{
+						$valueArr['ttl'] = stripslashes($Spend15[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Spend15[0]['noti_image'];							
+					}
+					if($StrVal['noti_type']=='4' && $Bring7[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Bring7[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Bring7[0]['noti_image'];						
+					}
+					if($StrVal['noti_type']=='5' && $Bring3[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Bring3[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Bring3[0]['noti_image'];						
+					}
+					if($StrVal['noti_type']=='6' && $Weather3[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Weather3[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Weather3[0]['noti_image'];	
+					}
+					if($StrVal['noti_type']=='7' && $Spending3[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Spending3[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Spending3[0]['noti_image'];	
+						
+					}
+					if($StrVal['noti_type']=='8' && $Weather2[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Weather2[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Weather2[0]['noti_image'];	
+					}
+					if($StrVal['noti_type']=='9' && $Weather1[0]['noti_title']!='')
+					{	
+						$valueArr['ttl'] = stripslashes($Weather1[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Weather1[0]['noti_image'];	
+					}
+					if($StrVal['noti_type']=='10' && $Send_offMsg[0]['noti_title']!='')
+					{
+						$valueArr['ttl'] = stripslashes($Send_offMsg[0]['noti_title']);
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$Send_offMsg[0]['file_1'];
+						
+					}
+					if($StrVal['noti_type']=='11' && $PickupNoti[0]['noti_title']!='')
+					{
+						$valueArr['ttl'] = stripslashes($PickupNoti[0]['noti_title']);
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$PickupNoti[0]['file_1'];
+					}
+					if($StrVal['noti_type']=='16')
+					{	
+						//$var1 = $Notidate_1 .','. $Notidate_2. ','.$Notidate_3;
+		     			//$var2 = $NotiTime_1 .' , '. $NotiTime_2. ' , '.$NotiTime_3;
+						
+						//$var1 = date('Y-m-d',strtotime('+1 day', strtotime($DepatureArr2[0]['flight_Start_Date'])));
+						
+						$var1 = $day2type16;						
+						//$var1 = $Notidate_1 ;
+						//$var2 = $NotiTime_1 .','. $NotiTime_2. ','.$NotiTime_3;
+						$var2 = '06:00 am';
+													
+						/*if($OrientArr[0]['noti_image']!='' && $OrientArr[0]['noti_title']!=''){								 
+						$valueArr['ttl'] = stripslashes($OrientArr[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$OrientArr[0]['noti_image'];	
+						}*/
+						if($tbl_orientation[0]['noti_image']!='' && $tbl_orientation[0]['noti_title']!=''){								 
+						$valueArr['ttl'] = stripslashes($tbl_orientation[0]['noti_title']);	 
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$tbl_orientation[0]['noti_image'];	
+						}
+						
+						$valueArr['date'] = $var1;
+						$valueArr['time'] = $var2;
+					}
+					if($StrVal['noti_type']!='17')
+					{	
+						$valueArrTMArr = array();						
+					}					
+					else
+					{
+						$valueArrTMArr = array();							
+						//$valueArr['desc'] 	 = "Be prepared and get hyped for an exciting day. Don't miss out on these attractions!";
+						$valueArr['desc'] = '';
+						$Magic_Kingdom	= $objData->getAll("select * from tbl_magic where form_id = '".$form_id."'");	
+						$valueArrTM['ttl']  = "Magic Kingdom";		
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$Magic_Kingdom[0]['file_11'];
+						$valueArrTM['detail']  = stripslashes($Magic_Kingdom[0]['magic_king']);	
+						$valueArrTMArr[0] = $valueArrTM;
+
+						$Wishday	= $objData->getAll("SELECT * FROM `tbl_wishday` WHERE `form_id` = '".$form_id."'");
+						$valueArrTM['ttl']  = "Wish Day";
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$Wishday[0]['file_18'];
+						$valueArrTM['detail']  = stripslashes($Wishday[0]['wishday']);
+						$valueArrTMArr[1] = $valueArrTM;
+						
+						$Epcot	= $objData->getAll("SELECT * FROM `tbl_epcot` WHERE `form_id` = '".$form_id."'");	
+						$valueArrTM['ttl']  = "Epcot";		
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$Epcot[0]['file_12'];
+						$valueArrTM['detail']  = stripslashes($Epcot[0]['epcot']);	
+						$valueArrTMArr[1] = $valueArrTM;
+						
+						$HollywoodArr	= $objData->getAll("SELECT * FROM `tbl_hollywood` WHERE `form_id` = '".$form_id."'");	
+						$valueArrTM['ttl']  = "Hollywood Studios";		
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$HollywoodArr[0]['file_13'];
+						$valueArrTM['detail']  = stripslashes($HollywoodArr[0]['holly_studios']);	
+						$valueArrTMArr[2] = $valueArrTM;
+						
+						$AniuniArr	= $objData->getAll("SELECT * FROM `tbl_aniuni` WHERE `form_id` = '".$form_id."'");	
+						$valueArrTM['ttl']  = "Animal Kingdom";		
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$AniuniArr[0]['file_14'];
+						$valueArrTM['detail']  = stripslashes($AniuniArr[0]['animal_king']);	
+						$valueArrTMArr[3] = $valueArrTM;	
+						
+						$valueArrTM['ttl']  = "Universal";		
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$AniuniArr[0]['file_15'];
+						$valueArrTM['detail']  = stripslashes($AniuniArr[0]['universal']);	
+						$valueArrTMArr[4] = $valueArrTM;	
+						
+						$SeaworldArr	= $objData->getAll("SELECT * FROM `tbl_seaworld` WHERE `form_id` = '".$form_id."'");	
+						$valueArrTM['ttl']  = "Seaworld";		
+						$valueArrTM['img']  = $objData->SITEURL.'upload/'.$SeaworldArr[0]['file_16'];
+						$valueArrTM['detail']  = $SeaworldArr[0]['seaworld'];	
+						$valueArrTMArr[5] = $valueArrTM;						
+					}					
+					if($StrVal['noti_type']=='28' && $impNumberArr[0]['noti_title']!='')
+					{
+						$valueArr['ttl'] = stripslashes($impNumberArr[0]['noti_title']);
+						$valueArr['img'] = $objData->SITEURL.'upload/'.$impNumberArr[0]['file_1'];
+					}					
+										
+					$valueArr['reg_day'] = $valueArrTMArr;	
+					
+					$valueArrAll[] = $valueArr;
+				}				
+				//	
+				$exp_dt = date('Y-m-d',strtotime('+3 day',strtotime($dep_last[0]['Flight_Start_Date1'])));				
+				//$valueArrAll1['f_start_date'] = date('Y-m-d',strtotime($FormArr[0]['child__Start_Date']));
+				$valueArrAll1['f_start_date'] = $day2type16;
+				
+				$valueArrAll1['f_end_date']   =  date('Y-m-d',strtotime($FormArr[0]['child_End_Date']));
+				//date('Y-m-d',strtotime('+3 day', strtotime($FormArr[0]['child__Start_Date'])));				
+				//$valueArrAll1['f_expire_date']   =  date('Y-m-d',strtotime('+4 day',strtotime($FormArr[0]['child_End_Date'])));				
+				$valueArrAll1['f_expire_date']   =  $exp_dt;
+				
+				$outputjson['form_data'] =  $valueArrAll1;
+				
+				$outputjson['data'] = $valueArrAll;
+				$outputjson['status'] 	 = "1"; 
+				$outputjson['tc'] = count($valueArrAll) ;
+				$valueArrAll= NULL;
+			}
+			else
+			{
+				$outputjson['status'] = '3';
+				$outputjson['msg'] = 'No record found.';	
+				$outputjson['tc'] = '0';
+			}
+			
+			//SEND MAIL TO ADMIN & OWNER
+			//select tp.*,tf.* from tbl_participant as tp inner join tbl_form as tf on tp.form_id = tf.id where tp.unique_id = 'TEZ842' and tp.isAppMail='0'
+			$isAppMail = $objData->getAll("select tp.*,tf.* from tbl_participant as tp inner join tbl_form as tf on tp.form_id = tf.id where tp.unique_id = '".$unique_id."' and tp.isAppMail='0'");
+			//echo "select * from tbl_register where uid='".$isAppMail[0]['uid']."'"; die;
+			$sendmailArr = $objData->getAll("select * from tbl_register where uid='".$isAppMail[0]['uid']."'");
+			//echo "<pre>"; print_r($objData->getSQL()); die;
+			if(count($isAppMail)>0)
+			{
+				$objData->getAll("update tbl_participant set isAppMail='1' where unique_id='".$unique_id."'");
+				$strMessage = '<html> 
+							  <head> 
+							  <title>Make A Wish</title>
+							  </head>    
+							  <body>       
+							  <table style="width:100%;height:100%;background:#ccc;font-size:12px;font-family:Georgia,Arial,Helvetica,sans-serif;margin:0;padding:0">              <tbody>
+							  <tr> 
+							  <td><div style="color:#333;min-height:90%;background:#fafafa;text-align:center;width:600px;margin:10px auto;padding:20px 20px 10px">
+							  <div style="background:#fafafa;padding:15px 10px; border-bottom:solid 3px #000;">
+							  <a target="_blank" href="' . $objData->SITEURL . '"><img alt="" src="' . $objData->SITEURL . 'images/MAW_Logo_Canada.jpg" ></a>                      </div> 
+							  <div style="margin-top:20px;text-align:justify"> 
+							  <p>Dear Admin ,&nbsp;</p>
+							  <p>Make-A-Wish® Application downloaded by '.$isAppMail[0]['parti_fname'].' '.$isAppMail[0]['parti_lname'].' and it\'s Unique ID : '.$unique_id.' </p> 
+							  
+							  <p>Warmest regards,</p>
+							  <p><strong>Make-A-Wish® Team</strong></p> 
+							  </div>  
+							  <p height=30 style="background:#000; color:#fff; padding:10px 0; text-align:center; font-family:Arial, Helvetica, sans-serif; font-size:12px;"> &nbsp; &copy; ' . date('Y') . ' All Rights Reserved.</p>
+							  </div> 
+							  </td>
+							  </tr> 
+							  </tbody>
+							  </table>
+							  </body>
+							  </html>';
+							  $headers1   = "MIME-Version: 1.0" . "\r\n";
+							  $headers1 .= "Content-type:text/html;charset=iso-8859-1" . "\r\n";
+							  $headers1 .= 'From: ' . $unique_id;
+							  $strSub = "Make-A-Wish® Canada - new app download";
+							  $strTo  = $objData->INFO_MAIL;
+							  mail($strTo, $strSub, $strMessage, $headers1);
+							  
+							  
+							  $strMessage2 = '<html> 
+							  <head> 
+							  <title>Make A Wish</title>
+							  </head>    
+							  <body>       
+							  <table style="width:100%;height:100%;background:#ccc;font-size:12px;font-family:Georgia,Arial,Helvetica,sans-serif;margin:0;padding:0">              <tbody>
+							  <tr> 
+							  <td><div style="color:#333;min-height:90%;background:#fafafa;text-align:center;width:600px;margin:10px auto;padding:20px 20px 10px">
+							  <div style="background:#fafafa;padding:15px 10px; border-bottom:solid 3px #000;">
+							  <a target="_blank" href="' . $objData->SITEURL . '"><img alt="" src="' . $objData->SITEURL . 'images/MAW_Logo_Canada.jpg" ></a>                      </div> 
+							  <div style="margin-top:20px;text-align:justify"> 
+							  <p>Dear Admin ,&nbsp;</p>
+							   <p>Make-A-Wish® Application downloaded by '.$isAppMail[0]['parti_fname'].' '.$isAppMail[0]['parti_lname'].' and it\'s Unique ID : '.$unique_id.' </p> 
+							  <p>Warmest regards,</p>
+							  <p><strong>Make-A-Wish® Team</strong></p> 
+							  </div>  
+							  <p height=30 style="background:#000; color:#fff; padding:10px 0; text-align:center; font-family:Arial, Helvetica, sans-serif; font-size:12px;"> &nbsp; &copy; ' . date('Y') . ' All Rights Reserved.</p>
+							  </div> 
+							  </td>
+							  </tr> 
+							  </tbody>
+							  </table>
+							  </body>
+							  </html>';
+							  $headers2   = "MIME-Version: 1.0" . "\r\n";
+							  $headers2 .= "Content-type:text/html;charset=iso-8859-1" . "\r\n";
+							  $headers2 .= 'From: ' . $unique_id;
+							  $strSu2 = "Make-A-Wish® Canada - new app download";
+							  $strT2  = $sendmailArr[0]['email'];
+							  mail($strT2, $strSu2, $strMessage2, $headers2);
+							  $outputjson['isAppMail'] = '1';
+			}
+		}
+		else
+		{
+			$outputjson['status'] = '2';
+			$outputjson['msg'] = 'No record found.';
+			$outputjson['tc'] = '0';
+		}
+	}
+	$temp_outputjson = removeNULL($outputjson);
+  	echo json_encode($temp_outputjson);
+		
+}
+function Logout()
+{
+	 $objData = new PCGData();
+	 $arrJson = array();
+	 $unique_id = $_REQUEST['unique_id'];
+	 $arrData = $objData->getAll("SELECT * FROM tbl_participant WHERE unique_id='".$unique_id."' ");
+	 if(count($arrData)>0)
+	 {
+		 $logout = $objData->getAll("Update tbl_participant SET device_id='' WHERE unique_id='".$unique_id."'");
+		 $arrReturn['status'] = '1';
+ 		 $arrReturn['msg'] = 'Logout success';
+	 }
+	 else
+	 {
+		$arrReturn['status'] = '1';	 
+		$arrReturn['msg'] = 'Logout success';
+	 }
+	 
+	 $arrJson = removeNULL($arrReturn);
+     unset($objData);
+     echo json_encode($arrJson);	
+	
+}
+function Uniq_DeviceID_Update()
+{
+	 $objData = new PCGData();
+	 $arrJson = array();
+	 $unique_id = $_REQUEST['unique_id'];
+	 $device_id = $_REQUEST['device_id'];
+	 $platform = $_REQUEST['platform'];
+	 $arrData = $objData->getAll("SELECT * FROM tbl_participant WHERE unique_id='".$unique_id."'");
+	 if($unique_id!='')
+	 {				
+		 if(count($arrData)>0)
+		 {
+			 //$logout = $objData->getAll("Update tbl_participant SET device_id='".$device_id."' WHERE unique_id='".$unique_id."'");		 
+			 $objData->getAll("update tbl_participant set device_id='' where parti_email='".$ListArr[0]['parti_email']."'");
+			 $objData->getAll("update tbl_participant set device_id='' where device_id='".$device_id."'");
+			 $objData->getAll("update tbl_participant set device_id='".$device_id."',platform='".$platform."' where unique_id = '".$unique_id."'");		
+			
+			 $arrReturn['status'] = '1';
+			 $arrReturn['msg'] = 'device token update success';
+		 }
+		 else
+		 {
+			$arrReturn['status'] = '0';	 
+			$arrReturn['msg'] = 'device token update failed';
+		 }
+	 } 
+	 else
+	 {
+		$arrReturn['status'] = '2';	 
+		$arrReturn['msg'] = 'Please enter unique id'; 
+	 }
+	 $arrJson = removeNULL($arrReturn);
+     unset($objData);
+     echo json_encode($arrJson);	
+	
+	
+}
+?>
